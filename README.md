@@ -13,50 +13,23 @@ Additionally, the music player includes vibrant real-time music visualizations, 
 - *Music Visualizer*: 🌈 Stunning, real-time music visualizations created using FFTW and rendered with raylib.
 - *User-Friendly GUI*: 🖱️ An intuitive and minimalistic interface for navigation and playback control.
 
-## ⚙️ Installation
 ### 🛠️ Prerequisites
-Ensure you have the following installed:
 - GCC or any compatible C compiler
 - [miniaudio](https://github.com/mackron/miniaudio)
 - [raylib](https://www.raylib.com/)
-- [FFTW](http://www.fftw.org/)
-
-### 🌀 Installing FFTW
-To install FFTW, follow these steps based on your operating system:
-
-#### 🐧 For Debian/Ubuntu:
-bash
-sudo apt update
-sudo apt install libfftw3-dev
-
-
-#### 🐦 For Fedora:
-bash
-sudo dnf install fftw-devel
-
-
-#### 🍎 For macOS (using Homebrew):
-bash
-brew install fftw
-
-
-#### 🖥️ For Windows:
-Download the precompiled binaries or source code from the [official FFTW website](http://www.fftw.org/) and follow the installation instructions provided there.
+- [FFTW](http://www.fftw.org/) (Only header files required, no need for installation)
 
 ### 🏗️ Build Instructions
 1. Clone the repository:
    bash
    git clone <repository-url>
    cd <repository-folder>
+2. Compile the source code:
+   ./build.sh
 
-2. Install the required libraries if not already available.
-3. Compile the source code:
+3. Run the program:
    bash
-   gcc -o music_player main.c -lraylib -lfftw3 -lpthread -lm
-
-4. Run the program:
-   bash
-   ./music_player
+   ./music_player <music_folder_path>
 
 
 ## 🚀 Usage
@@ -68,6 +41,8 @@ Download the precompiled binaries or source code from the [official FFTW website
 Below is a preview of the music player's interface and visualization capabilities. Click the image to view the full video demonstration:
 ![alt text](./screenshot/1.png)
 ![alt text](./screenshot/2.png)
+[![Watch the video](./screenshot/1.png)](./Video/cmusic.mp4)
+
 ## 🤝 Contributions
 Contributions are welcome! Please feel free to fork the repository and submit pull requests.
 
