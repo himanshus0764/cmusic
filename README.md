@@ -66,9 +66,8 @@ Download the precompiled binaries or source code from the [official FFTW website
 
 ## 🎥 Video Preview
 Below is a preview of the music player's interface and visualization capabilities. Click the image to view the full video demonstration:
-
-[![Music Player Preview](videos/thumbnail.jpg)](videos/music_player_demo.mp4 "Watch Demo")
-
+![alt text](./screenshot/1.png)
+![alt text](./screenshot/2.png)
 ## 🤝 Contributions
 Contributions are welcome! Please feel free to fork the repository and submit pull requests.
 
