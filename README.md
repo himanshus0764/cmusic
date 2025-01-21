@@ -43,7 +43,7 @@ Below is a preview of the music player's interface and visualization capabilitie
 ![alt text](./screenshot/2.png)
 
 
-https://github.com/user-attachments/assets/1daa463a-29a2-437a-9e2f-2a25488cf6e5
+https://github.com/user-attachments/assets/b8e99877-c40b-4187-998b-7d2f36260d20
 
 ## 🤝 Contributions
 Contributions are welcome! Please feel free to fork the repository and submit pull requests.
