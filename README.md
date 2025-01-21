@@ -49,4 +49,4 @@ https://github.com/user-attachments/assets/b8e99877-c40b-4187-998b-7d2f36260d20
 Contributions are welcome! Please feel free to fork the repository and submit pull requests.
 
 ## 📜 License
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the GPL License. See the LICENSE file for details.
