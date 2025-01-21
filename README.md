@@ -41,7 +41,7 @@ Additionally, the music player includes vibrant real-time music visualizations, 
 Below is a preview of the music player's interface and visualization capabilities. Click the image to view the full video demonstration:
 ![alt text](./screenshot/1.png)
 ![alt text](./screenshot/2.png)
-![Watch the video](https://github.com/himanshus0764/cmusic/issues/2#issue-2800631217)
+https://github.com/himanshus0764/cmusic/issues/2#issue-2800631217
 
 ## 🤝 Contributions
 Contributions are welcome! Please feel free to fork the repository and submit pull requests.
