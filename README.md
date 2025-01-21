@@ -41,6 +41,8 @@ Additionally, the music player includes vibrant real-time music visualizations, 
 Below is a preview of the music player's interface and visualization capabilities. Click the image to view the full video demonstration:
 ![alt text](./screenshot/1.png)
 ![alt text](./screenshot/2.png)
+
+
 https://github.com/user-attachments/assets/1daa463a-29a2-437a-9e2f-2a25488cf6e5
 
 ## 🤝 Contributions
