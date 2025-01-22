@@ -38,10 +38,7 @@ bool isPaused = false;
 char musicFiles[2048][512];
 int musicFileCount = 0;
 int selectedFile = -1;
-int value =0; // Scroll value
-int minValue = 0;
-int maxValue = 255;
- //for update a colour value in bars
+int value = 0; //for update a colour value in bars
 // Color array for changing FFT bar colors
 Color barColors[BAR_COUNT];
 // Timer to track the 5-second interval
@@ -87,6 +84,7 @@ void colour_scrolling_adjust(){
            BeginDrawing();
            ClearBackground(RAYWHITE);
            DrawText(TextFormat("Value: %d", value), 50, 50, 20, WHITE);
+           EndDrawing();
 }
 void ChangeBarColors() {
     Color startColor = (Color){0, 255, 0, 255}; // Blue
@@ -143,9 +141,7 @@ void ChangeBarColors() {
         float music_len = GetMusicTimeLength(music);
         int window_width;
         int window_height;
-        colour_scrolling_adjust();
-        value = (int)GuiSliderBar((Rectangle){50, 100, 300, 20}, NULL, NULL, value, minvalue, maxvalue);
-        DrawText(TextFormat("Value: %d", value), 50, 50, 20, WHITE);
+        ChangeBarColors();
         GuiLoadStyle("dark.rgs");
 
         while (!WindowShouldClose()) {
