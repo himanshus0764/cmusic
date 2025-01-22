@@ -2,7 +2,7 @@
 #include "raygui.h"
 #include "raylib.h"
 #include <dirent.h>
-#include <fftw3.h>
+#include "fftw3.h"
 #include <string.h>
 #include <math.h>
 #include <time.h>
@@ -25,6 +25,8 @@
 #define MIN_BAR_HEIGHT 1.0f
 #define SMOOTHING_FACTOR 0.1f
 #define BACKGROUND_COLOR (Color){0,0,0,255}
+#define minvalue 0 //colour mix value
+#define maxvalue 255 //colour max value
 
 float audioData[BUFFER_SIZE];
 float fftData[BAR_COUNT];
@@ -36,26 +38,25 @@ bool isPaused = false;
 char musicFiles[2048][512];
 int musicFileCount = 0;
 int selectedFile = -1;
-
+int value =0; // Scroll value
+int minValue = 0;
+int maxValue = 255;
+ //for update a colour value in bars
 // Color array for changing FFT bar colors
 Color barColors[BAR_COUNT];
-
 // Timer to track the 5-second interval
 float colorChangeTimer = 0.0f;
 const float COLOR_CHANGE_INTERVAL = 5.0f; // 5 seconds
-
 void AudioProcessor(void *audioStream, unsigned int frameCount) {
     float *audio = (float *)audioStream;
     for (int i = 0; i < BUFFER_SIZE; i++) {
         audioData[i] = audio[i];
     }
-
     fftwf_execute(fftPlan);
     for (int i = 0; i < BAR_COUNT; i++) {
         fftData[i] = audioData[i] * audioData[i];
     }
 }
-
 void LoadMusicFiles(const char *path) {
     struct dirent *entry;
     DIR *dp = opendir(path);
@@ -64,41 +65,52 @@ void LoadMusicFiles(const char *path) {
         printf("Could not open directory\n");
         return;
     }
-
     while ((entry = readdir(dp))) {
         if (entry->d_type == DT_REG) {
             if (strstr(entry->d_name, ".mp3") ||
                 strstr(entry->d_name, ".wav") ||
                 strstr(entry->d_name, ".ogg")) {
-
                 // Create the full file path
                 snprintf(musicFiles[musicFileCount],
                          sizeof(musicFiles[musicFileCount]), "%s/%s", path,
                          entry->d_name);
-
                 // Print the full path for debugging purposes
                 printf("Found music file: %s\n", musicFiles[musicFileCount]);
-
                 musicFileCount++;
             }
         }
     }
     closedir(dp);
 }
-
+void colour_scrolling_adjust(){
+    value=(int)GuiSliderBar((Rectangle){ 50, 100, 300, 20 }, NULL, NULL,0, minvalue, maxvalue);
+           BeginDrawing();
+           ClearBackground(RAYWHITE);
+           DrawText(TextFormat("Value: %d", value), 50, 50, 20, WHITE);
+}
 void ChangeBarColors() {
-    Color startColor = (Color){255, 0, 0, 255}; // Red
-    Color endColor = (Color){0, 0, 255, 255};   // Blue
+    Color startColor = (Color){0, 255, 0, 255}; // Blue
+    Color middleColor = (Color){255, 0, 0, 255}; // Red
+    Color endColor = (Color){0, 0, 255, 255};   // Green
 
     for (int i = 0; i < BAR_COUNT; i++) {
         float ratio = (float)i / (BAR_COUNT - 1); // Normalize index to [0, 1]
-        barColors[i].r = (unsigned char)(startColor.r + ratio * (endColor.r - startColor.r));
-        barColors[i].g = (unsigned char)(startColor.g + ratio * (endColor.g - startColor.g));
-            barColors[i].b = (unsigned char)(startColor.b + ratio * (endColor.b - startColor.b));
-            barColors[i].a = 255; // Full opacity
-        }
-    }
 
+        if (ratio < 0.5f) {
+            float subRatio = ratio / 0.5f; // Normalize ratio to [0, 1] for first half
+            barColors[i].r = (unsigned char)(startColor.r + subRatio * (middleColor.r - startColor.r));
+            barColors[i].g = (unsigned char)(startColor.g + subRatio * (middleColor.g - startColor.g));
+            barColors[i].b = (unsigned char)(startColor.b + subRatio * (middleColor.b - startColor.b));
+        } else {
+            float subRatio = (ratio - 0.5f) / 0.5f; // Normalize ratio to [0, 1] for second half
+            barColors[i].r = (unsigned char)(middleColor.r + subRatio * (endColor.r - middleColor.r));
+            barColors[i].g = (unsigned char)(middleColor.g + subRatio * (endColor.g - middleColor.g));
+            barColors[i].b = (unsigned char)(middleColor.b + subRatio * (endColor.b - middleColor.b));
+        }
+
+        barColors[i].a = 255; // Full opacity
+    }
+}
     int main(int argc, char *argv[]) {
         const char *directoryPath = (argc == 1) ? GetApplicationDirectory() : argv[1];
 
@@ -119,7 +131,7 @@ void ChangeBarColors() {
         fftPlan = fftwf_plan_r2r_1d(BUFFER_SIZE, audioData, audioData, FFTW_R2HC,
                                     FFTW_ESTIMATE);
 
-        music = LoadMusicStream(musicFiles[0]);
+        music = LoadMusicStream(musicFiles[11]);
         PlayMusicStream(music);
 
         AttachAudioStreamProcessor(music.stream, AudioProcessor);
@@ -131,23 +143,15 @@ void ChangeBarColors() {
         float music_len = GetMusicTimeLength(music);
         int window_width;
         int window_height;
-
-        ChangeBarColors();
+        colour_scrolling_adjust();
+        value = (int)GuiSliderBar((Rectangle){50, 100, 300, 20}, NULL, NULL, value, minvalue, maxvalue);
+        DrawText(TextFormat("Value: %d", value), 50, 50, 20, WHITE);
         GuiLoadStyle("dark.rgs");
 
         while (!WindowShouldClose()) {
             UpdateMusicStream(music);
             window_width = GetScreenWidth();
             window_height = GetScreenHeight();
-
-            // Update the timer
-            colorChangeTimer += GetFrameTime();
-
-            if (colorChangeTimer >= COLOR_CHANGE_INTERVAL) {
-                // Reset the timer and change the colors for all bars
-                colorChangeTimer = 0.0f;
-                ChangeBarColors(); // Change color for all bars
-            }
 
             if (IsKeyPressed(KEY_SPACE)) {
                 if (isPaused) {
