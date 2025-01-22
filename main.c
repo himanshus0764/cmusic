@@ -28,6 +28,8 @@
 #define minvalue 0 //colour mix value
 #define maxvalue 255 //colour max value
 
+#define PADDING 30
+
 float audioData[BUFFER_SIZE];
 float fftData[BAR_COUNT];
 fftwf_plan fftPlan;
@@ -139,7 +141,9 @@ void ChangeBarColors() {
         int focus = -1;
         int prev_active = 0;
         float music_len = GetMusicTimeLength(music);
+        float current_pos = 0.0f;
         int window_width;
+        bool is_dragging = false;
         int window_height;
         ChangeBarColors();
         GuiLoadStyle("dark.rgs");
@@ -300,6 +304,29 @@ void ChangeBarColors() {
                         BUTTON_WIDTH, 10
                 };
                 GuiSliderBar(des, "Volume", NULL, &volume, 0, 100);
+               Rectangle des_seek = {
+                        MUSIC_LIST_WIDTH+10,
+                        window_height - CONTROL_PANEL_HEIGHT + PADDING,
+                        window_width - MUSIC_LIST_WIDTH - PADDING + 10, 10
+                                };
+
+               if(CheckCollisionPointRec(GetMousePosition(), des_seek) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                {
+                    is_dragging = true;
+                }
+ 
+                if(!is_dragging)
+                {
+                    current_pos = GetMusicTimePlayed(music); 
+                }
+
+                  if(is_dragging && IsMouseButtonReleased(MOUSE_LEFT_BUTTON))
+                {
+                    is_dragging = false;
+                    SeekMusicStream(music,current_pos); 
+                }
+
+                GuiSliderBar(des_seek,NULL, NULL, &current_pos,0,music_len);
 
                 EndDrawing();
             }
