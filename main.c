@@ -85,7 +85,7 @@ void LoadMusicFiles(const char *path) {
     closedir(dp);
 }
 int shuffle_music() {
-    if (stuffle_play== true) {
+    if (stuffle_play && musicFileCount > 0) {
         srand(time(NULL));
         int num = rand() % musicFileCount;
         printf("%d\n", num);
@@ -93,6 +93,7 @@ int shuffle_music() {
     }
     return -1;
 }
+
 
 
 
@@ -342,17 +343,26 @@ int main(int argc, char *argv[]) {
 
         GuiSliderBar(des_seek, NULL, NULL, &current_pos, 0, music_len);
 
-        // if (GuiButton((Rectangle){MUSIC_LIST_WIDTH + 110,
-        //                         window_height - CONTROL_PANEL_HEIGHT + 100,
-        //                         BUTTON_WIDTH, BUTTON_HEIGHT},
-        //               "Stuffle")) {
-        //     stuffle_play = true;
-        // }
-        // active = shuffle_music(); // Get a random file index
-        // music = LoadMusicStream(musicFiles[active]); // Load new music
-        // PlayMusicStream(music); // Play the new music
-        // AttachAudioStreamProcessor(music.stream, AudioProcessor); // Reattach audio processor
-        // stuffle_play = false; // Stop the loop after playing the new music
+        bool loadNewTrack = false;
+
+        if (GuiButton((Rectangle){MUSIC_LIST_WIDTH + 110,
+                                  window_height - CONTROL_PANEL_HEIGHT + 100,
+                                  BUTTON_WIDTH, BUTTON_HEIGHT},
+                      "Stuffle")) {
+            stuffle_play = true;
+            loadNewTrack = true; // Set flag to load new track
+        }
+
+        if (loadNewTrack) {
+            active = shuffle_music(); // Get a random file index
+            if (active != -1) { // Check if the index is valid
+                UnloadMusicStream(music); // Unload the current music
+                music = LoadMusicStream(musicFiles[active]); // Load new music
+                PlayMusicStream(music); // Play the new music
+            }
+            loadNewTrack = false; // Reset the flag
+        }
+
         EndDrawing();
     }
 
