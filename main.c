@@ -9,14 +9,14 @@
 #include <time.h>
 
 #define BUFFER_SIZE 1024
-#define BAR_COUNT 128
+#define BAR_COUNT 90
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720
 #define CONTROL_PANEL_HEIGHT 150
 #define MUSIC_LIST_WIDTH 400
 #define MUSIC_LIST_HEIGHT 400
 #define BAR_WIDTH 5
-#define BAR_SPACING 2
+#define BAR_SPACING 1
 #define FFT_MAGNITUDE_SCALING 0.4f
 #define BUTTON_WIDTH 120
 #define BUTTON_HEIGHT 40
@@ -35,7 +35,8 @@ float fftData[BAR_COUNT];
 fftwf_plan fftPlan;
 float barHeights[BAR_COUNT];
 Music music;
-bool stuffle_play=0;// stuffle play button use
+bool stuffle_play=0;
+bool cliked_stufflebutton=0;
 bool isPlaying = false;
 bool isPaused = false;
 char musicFiles[2048][512];
@@ -85,18 +86,13 @@ void LoadMusicFiles(const char *path) {
     closedir(dp);
 }
 int shuffle_music() {
-    if (stuffle_play && musicFileCount > 0) {
+    if (stuffle_play&&musicFileCount > 0) {
         srand(time(NULL));
         int num = rand() % musicFileCount;
-        printf("%d\n", num);
         return num;
     }
     return -1;
 }
-
-
-
-
 void colour_scrolling_adjust(){
     value=(int)GuiSliderBar((Rectangle){ 50, 100, 300, 20 }, NULL, NULL,0, minvalue, maxvalue);
     BeginDrawing();
@@ -342,27 +338,21 @@ int main(int argc, char *argv[]) {
         }
 
         GuiSliderBar(des_seek, NULL, NULL, &current_pos, 0, music_len);
-
-        bool loadNewTrack = false;
-
-        if (GuiButton((Rectangle){MUSIC_LIST_WIDTH + 110,
-                                  window_height - CONTROL_PANEL_HEIGHT + 100,
-                                  BUTTON_WIDTH, BUTTON_HEIGHT},
-                      "Stuffle")) {
-            stuffle_play = true;
-            loadNewTrack = true; // Set flag to load new track
-        }
-
-        if (loadNewTrack) {
-            active = shuffle_music(); // Get a random file index
-            if (active != -1) { // Check if the index is valid
-                UnloadMusicStream(music); // Unload the current music
-                music = LoadMusicStream(musicFiles[active]); // Load new music
-                PlayMusicStream(music); // Play the new music
-            }
-            loadNewTrack = false; // Reset the flag
-        }
-
+        // if (GuiButton((Rectangle){MUSIC_LIST_WIDTH + 110,
+        //                           window_height - CONTROL_PANEL_HEIGHT + 100,
+        //                           BUTTON_WIDTH, BUTTON_HEIGHT},
+        //               stuffle_play ? "Shuffle On" : "Shuffle Off")) {
+        //     stuffle_play = !stuffle_play; // Toggle shuffle state
+        //     if (stuffle_play && musicFileCount > 0) {
+        //         active = shuffle_music(); // Get a random index
+        //         if (active != -1 && active != prev_active) { // Avoid replaying the same track
+        //             UnloadMusicStream(music); // Unload current track
+        //             music = LoadMusicStream(musicFiles[active]); // Load new track
+        //             PlayMusicStream(music); // Start playback
+        //             prev_active = active; // Update the previous active track
+        //         }
+        //     }
+        // }
         EndDrawing();
     }
 
