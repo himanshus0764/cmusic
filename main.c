@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stdio.h>
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
 #include "raylib.h"
@@ -14,7 +15,6 @@
 #define WINDOW_HEIGHT 720
 #define CONTROL_PANEL_HEIGHT 150
 #define MUSIC_LIST_WIDTH 400
-#define MUSIC_LIST_HEIGHT 400
 #define BAR_WIDTH 5
 #define BAR_SPACING 1
 #define FFT_MAGNITUDE_SCALING 0.4f
@@ -26,333 +26,328 @@
 #define MIN_BAR_HEIGHT 1.0f
 #define SMOOTHING_FACTOR 0.1f
 #define BACKGROUND_COLOR (Color){0,0,0,255}
-#define minvalue 0 //colour mix value
-#define maxvalue 255 //colour max value
 #define PADDING 30
 
 float audioData[BUFFER_SIZE];
 float fftData[BAR_COUNT];
-fftwf_plan fftPlan;
 float barHeights[BAR_COUNT];
-Music music;
-bool stuffle_play=0;
-bool cliked_stufflebutton=0;
-bool isPlaying = false;
-bool isPaused = false;
-char musicFiles[2048][512];
-int musicFileCount = 0;
-int selectedFile = -1;
-int value = 0; //for update a colour value in bars
-// Color array for changing FFT bar colors
 Color barColors[BAR_COUNT];
-// Timer to track the 5-second interval
-float colorChangeTimer = 0.0f;
-const float COLOR_CHANGE_INTERVAL = 5.0f; // 5 seconds
+fftwf_plan fftPlan;
+
+Music music;
+bool isPlaying    = false;
+bool isPaused     = false;
+bool shuffle_play = false;
+int  current_play = 0;
+
+char musicFiles[2048][512];
+int  musicFileCount = 0;
+int  selectedFile   = -1;
 
 void AudioProcessor(void *audioStream, unsigned int frameCount) {
     float *audio = (float *)audioStream;
-    for (int i = 0; i < BUFFER_SIZE; i++) {
-        audioData[i] = audio[i];
-    }
+    for (int i = 0; i < BUFFER_SIZE; i++) audioData[i] = audio[i];
     fftwf_execute(fftPlan);
-    for (int i = 0; i < BAR_COUNT; i++) {
+    for (int i = 0; i < BAR_COUNT; i++)
         fftData[i] = audioData[i] * audioData[i];
-    }
 }
 
 void LoadMusicFiles(const char *path) {
-    struct dirent *entry;
     DIR *dp = opendir(path);
-
-    if (dp == NULL) {
-        printf("Could not open directory\n");
-        return;
-    }
+    if (!dp) return;
+    struct dirent *entry;
     while ((entry = readdir(dp))) {
-        if (entry->d_type == DT_REG) {
-            if (strstr(entry->d_name, ".mp3") ||
-                strstr(entry->d_name, ".wav") ||
-                strstr(entry->d_name, ".ogg")) {
-                // Create the full file path
-                snprintf(musicFiles[musicFileCount],
-                         sizeof(musicFiles[musicFileCount]), "%s/%s", path,
-                         entry->d_name);
-                // Print the full path for debugging purposes
-                printf("Found music file: %s\n", musicFiles[musicFileCount]);
-                musicFileCount++;
-            }
+        if (entry->d_type == DT_REG &&
+           (strstr(entry->d_name, ".mp3") ||
+            strstr(entry->d_name, ".wav") ||
+            strstr(entry->d_name, ".ogg"))) {
+            snprintf(musicFiles[musicFileCount],
+                     sizeof(musicFiles[musicFileCount]),
+                     "%s/%s", path, entry->d_name);
+            musicFileCount++;
         }
     }
     closedir(dp);
 }
-int shuffle_music() {
-    if (stuffle_play&&musicFileCount > 0) {
-        srand(time(NULL));
-        int num = rand() % musicFileCount;
-        return num;
+
+bool HasMusicReachedEnd(void) {
+    float t = GetMusicTimePlayed(music);
+    float L = GetMusicTimeLength(music);
+    return (t >= L - 0.01f) && isPlaying && !isPaused;
+}
+
+void PlayMusicByIndex(int idx) {
+    if (idx < 0 || idx >= musicFileCount) return;
+    if (isPlaying) StopMusicStream(music);
+    UnloadMusicStream(music);
+    music = LoadMusicStream(musicFiles[idx]);
+    PlayMusicStream(music);
+    AttachAudioStreamProcessor(music.stream, AudioProcessor);
+    isPlaying    = true;
+    isPaused     = false;
+    current_play = idx;
+}
+
+int GetNextIndex(void) {
+    if (shuffle_play && musicFileCount > 1) {
+        int rnd;
+        do { rnd = rand() % musicFileCount; }
+        while (rnd == current_play);
+        return rnd;
+    } else {
+        return (current_play + 1) % musicFileCount;
     }
-    return -1;
-}
-void colour_scrolling_adjust(){
-    value=(int)GuiSliderBar((Rectangle){ 50, 100, 300, 20 }, NULL, NULL,0, minvalue, maxvalue);
-    BeginDrawing();
-    ClearBackground(RAYWHITE);
-    DrawText(TextFormat("Value: %d", value), 50, 50, 20, WHITE);
 }
 
-void ChangeBarColors() {
-    Color startColor = (Color){0, 255, 0, 255}; // Blue
-    Color middleColor = (Color){255, 0, 0, 255}; // Red
-    Color endColor = (Color){0, 0, 255, 255};   // Green
-
+void ChangeBarColors(void) {
+    Color start = (Color){0,255,0,255},
+          mid   = (Color){255,0,0,255},
+          end   = (Color){0,0,255,255};
     for (int i = 0; i < BAR_COUNT; i++) {
-        float ratio = (float)i / (BAR_COUNT - 1); // Normalize index to [0, 1]
-
-        if (ratio < 0.5f) {
-            float subRatio = ratio / 0.5f; // Normalize ratio to [0, 1] for first half
-            barColors[i].r = (unsigned char)(startColor.r + subRatio * (middleColor.r - startColor.r));
-            barColors[i].g = (unsigned char)(startColor.g + subRatio * (middleColor.g - startColor.g));
-            barColors[i].b = (unsigned char)(startColor.b + subRatio * (middleColor.b - startColor.b));
-        } else {
-            float subRatio = (ratio - 0.5f) / 0.5f; // Normalize ratio to [0, 1] for second half
-            barColors[i].r = (unsigned char)(middleColor.r + subRatio * (endColor.r - middleColor.r));
-            barColors[i].g = (unsigned char)(middleColor.g + subRatio * (endColor.g - middleColor.g));
-            barColors[i].b = (unsigned char)(middleColor.b + subRatio * (endColor.b - middleColor.b));
-        }
-
-        barColors[i].a = 255; // Full opacity
+        float r   = (float)i/(BAR_COUNT-1);
+        float sub = (r<0.5f)? r/0.5f : (r-0.5f)/0.5f;
+        Color from = (r<0.5f)? start : mid;
+        Color to   = (r<0.5f)? mid   : end;
+        barColors[i] = (Color){
+            (unsigned char)(from.r + sub*(to.r-from.r)),
+            (unsigned char)(from.g + sub*(to.g-from.g)),
+            (unsigned char)(from.b + sub*(to.b-from.b)),
+            255
+        };
     }
 }
 
 int main(int argc, char *argv[]) {
-    const char *directoryPath = (argc == 1) ? GetApplicationDirectory() : argv[1];
+    const char *dirPath = (argc == 1)
+                        ? GetApplicationDirectory()
+                        : argv[1];
 
-    float volume = 100.0f;
-    LoadMusicFiles(directoryPath);
+    float volume      = 100.0f;
+    float current_pos = 0.0f;
+    float music_len;
+    bool  is_dragging = false;
+    int   scrollIndex = 0, focus = -1, prev_active = -1;
 
-    if (musicFileCount == 0) {
-        printf("No audio files found in the directory.\n");
-        return 1;
-    }
+    srand((unsigned)time(NULL));
+    LoadMusicFiles(dirPath);
+    if (musicFileCount == 0) return 1;
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT,
-               "Raylib Music Player with Visualizer and Raygui");
+    InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Music Player");
     InitAudioDevice();
     SetTargetFPS(60);
 
-    fftPlan = fftwf_plan_r2r_1d(BUFFER_SIZE, audioData, audioData, FFTW_R2HC,
-                                FFTW_ESTIMATE);
-    music = LoadMusicStream(musicFiles[0]);
-    PlayMusicStream(music);
-
-    AttachAudioStreamProcessor(music.stream, AudioProcessor);
-
-    int scrollIndex = 0;
-    int active = 0;
-    int focus = -1;
-    int prev_active = 0;
-    float music_len = GetMusicTimeLength(music);
-    float current_pos = 0.0f;
-    int window_width;
-    bool is_dragging = false;
-    int window_height;
+    fftPlan = fftwf_plan_r2r_1d(
+        BUFFER_SIZE, audioData, audioData,
+        FFTW_R2HC, FFTW_ESTIMATE
+    );
     ChangeBarColors();
     GuiLoadStyle("dark.rgs");
 
+    PlayMusicByIndex(0);
+    music_len    = GetMusicTimeLength(music);
+    selectedFile = current_play;
+    prev_active  = current_play;
+
     while (!WindowShouldClose()) {
         UpdateMusicStream(music);
-        window_width = GetScreenWidth();
-        window_height = GetScreenHeight();
+
+        float currentTime = GetMusicTimePlayed(music);
+        float totalTime   = GetMusicTimeLength(music);
+
+        int curMin = (int)currentTime / 60;
+        int curSec = (int)currentTime % 60;
+
+        int totMin = (int)totalTime / 60;
+        int totSec = (int)totalTime % 60;
+
+        char timeStr[64];
+        snprintf(timeStr, sizeof(timeStr),
+                 "%02d:%02d / %02d:%02d",
+                 curMin, curSec, totMin, totSec);
+
+        if (HasMusicReachedEnd()) {
+            int next = GetNextIndex();
+            PlayMusicByIndex(next);
+            selectedFile = current_play;
+            prev_active  = current_play;
+            scrollIndex  = current_play;
+            music_len    = GetMusicTimeLength(music);
+        }
+
+        int w = GetScreenWidth(), h = GetScreenHeight();
 
         if (IsKeyPressed(KEY_SPACE)) {
-            if (isPaused) {
-                ResumeMusicStream(music);
-                isPaused = false;
-            } else {
-                PauseMusicStream(music);
-                isPaused = true;
-            }
+            if (isPaused) ResumeMusicStream(music), isPaused = false;
+            else          PauseMusicStream(music),  isPaused = true;
         }
-
         if (IsKeyPressed(KEY_RIGHT)) {
-            SeekMusicStream(music, GetMusicTimePlayed(music) + SEEK_TIME);
+            float t = GetMusicTimePlayed(music);
+            if (t + SEEK_TIME >= GetMusicTimeLength(music)) {
+                int next = GetNextIndex();
+                PlayMusicByIndex(next);
+                selectedFile = current_play;
+                prev_active  = current_play;
+                scrollIndex  = current_play;
+                music_len    = GetMusicTimeLength(music);
+            } else {
+                SeekMusicStream(music, t + SEEK_TIME);
+            }
+            current_pos = GetMusicTimePlayed(music);
         }
         if (IsKeyPressed(KEY_LEFT)) {
-            SeekMusicStream(music, GetMusicTimePlayed(music) - SEEK_TIME);
+            SeekMusicStream(music,
+                           GetMusicTimePlayed(music) - SEEK_TIME);
+            current_pos = GetMusicTimePlayed(music);
         }
-
         if (IsKeyPressed(KEY_ENTER)) {
-            if (isPlaying) {
-                StopMusicStream(music);
-                isPlaying = false;
-            } else {
-                PlayMusicStream(music);
-                isPlaying = true;
-            }
+            if (isPlaying) StopMusicStream(music), isPlaying = false;
+            else           PlayMusicStream(music), isPlaying = true;
         }
 
         const char *fileList[musicFileCount];
-        for (int i = 0; i < musicFileCount; i++) {
+        for (int i = 0; i < musicFileCount; i++)
             fileList[i] = strrchr(musicFiles[i], '/') + 1;
-        }
 
         BeginDrawing();
-        GuiListViewEx(
-                (Rectangle){0, 0, MUSIC_LIST_WIDTH, GetScreenHeight()},
-                fileList, musicFileCount, &scrollIndex, &active, &focus);
-        {
-            if (active == -1) {
-                active = prev_active;
-            } else if (active != prev_active) {
-                if (isPlaying) {
-                    StopMusicStream(music);
-                    isPlaying = false;
-                }
-
-                UnloadMusicStream(music);
-                music = LoadMusicStream(musicFiles[active]);
-                music_len = GetMusicTimeLength(music);
-                PlayMusicStream(music);
-                isPlaying = true;
-                AttachAudioStreamProcessor(music.stream, AudioProcessor);
-            }
-        }
-
-        prev_active = active;
-
         ClearBackground(BACKGROUND_COLOR);
 
-        // Expand the visualizer to fill most of the screen space
-        float visualizerWidth = window_width - MUSIC_LIST_WIDTH;
-        float d = visualizerWidth / BAR_COUNT;
-        float visualizerHeight = window_height - CONTROL_PANEL_HEIGHT;
-
-        // Normalize the magnitude across all bars
-        float maxMagnitude = 0.0f;
-        for (int i = 0; i < BAR_COUNT; i++) {
-            maxMagnitude = fmax(maxMagnitude, fftData[i]);
+        GuiListViewEx(
+            (Rectangle){0, 0, MUSIC_LIST_WIDTH, h},
+            fileList, musicFileCount,
+            &scrollIndex, &selectedFile, &focus
+        );
+        if (selectedFile >= 0 && selectedFile != prev_active) {
+            PlayMusicByIndex(selectedFile);
+            prev_active = selectedFile;
+            music_len   = GetMusicTimeLength(music);
         }
 
-        for (int i = 0; i < BAR_COUNT; i++) {
-            float magnitude = fftData[i] * FFT_MAGNITUDE_SCALING;
-
-            // Apply logarithmic scaling for higher frequencies
-            if (i > BAR_COUNT / 3) {
-                magnitude = log(magnitude + 1.0f) * 1.2f;
-            }
-
-            // Normalize the magnitude across all bars
-            magnitude = magnitude / maxMagnitude * MAX_BAR_HEIGHT;
-
-            // Apply smoothing (Moving average)
-            float avg = 0;
-            int count = 0;
-
-            for (int j = -SMOOTHING_WINDOW; j <= SMOOTHING_WINDOW; j++) {
-                if (i + j >= 0 && i + j < BAR_COUNT) {
-                    avg += fftData[i + j];
-                    count++;
+        {
+            float vw = w - MUSIC_LIST_WIDTH;
+            float vh = h - CONTROL_PANEL_HEIGHT;
+            float d  = vw / BAR_COUNT;
+            float maxMag = 0;
+            for (int i = 0; i < BAR_COUNT; i++)
+                maxMag = fmax(maxMag, fftData[i]);
+            for (int i = 0; i < BAR_COUNT; i++) {
+                float mag = fftData[i] * FFT_MAGNITUDE_SCALING;
+                if (i > BAR_COUNT/3) mag = log(mag + 1)*1.2f;
+                mag = mag / maxMag * MAX_BAR_HEIGHT;
+                float avg = 0; int cnt = 0;
+                for (int j = -SMOOTHING_WINDOW; j <= SMOOTHING_WINDOW; j++) {
+                    if (i+j>=0 && i+j<BAR_COUNT) { avg += fftData[i+j]; cnt++; }
                 }
+                mag = avg / cnt;
+                barHeights[i] += SMOOTHING_FACTOR * (mag - barHeights[i]);
+                barHeights[i] = fmin(barHeights[i], vh);
+                barHeights[i] = fmax(barHeights[i], MIN_BAR_HEIGHT);
+                float x = MUSIC_LIST_WIDTH + 10 + d*i + BAR_SPACING*i;
+                float y = (vh - barHeights[i]) / 2;
+                DrawRectangle(x, y, BAR_WIDTH, (int)barHeights[i], barColors[i]);
             }
-            magnitude = avg / count;
-
-            // Smooth the height transition of bars
-            barHeights[i] += SMOOTHING_FACTOR * (magnitude - barHeights[i]);
-
-            // Get the color for the current bar from the barColors array
-            Color barColor = barColors[i];
-
-            // Limit the maximum height of the bars
-            barHeights[i] = fmin(barHeights[i], visualizerHeight);
-            barHeights[i] = fmax(barHeights[i], MIN_BAR_HEIGHT);
-
-            // Center the bars vertically
-            float barX = MUSIC_LIST_WIDTH + 10 + d * i + (BAR_SPACING * i);
-            float barY = (visualizerHeight - barHeights[i]) / 2;
-            DrawRectangle(barX, barY, BAR_WIDTH, (int)barHeights[i], barColor);
         }
 
-        // Control Panel and Buttons
-        GuiPanel((Rectangle){MUSIC_LIST_WIDTH, window_height - CONTROL_PANEL_HEIGHT,
-                             WINDOW_WIDTH + 340, CONTROL_PANEL_HEIGHT},
-                 "Controls");
+        GuiPanel((Rectangle){
+            MUSIC_LIST_WIDTH, h - CONTROL_PANEL_HEIGHT,
+            w - MUSIC_LIST_WIDTH, CONTROL_PANEL_HEIGHT
+        }, "Controls");
 
-        // Play/Pause button
-        if (GuiButton((Rectangle){MUSIC_LIST_WIDTH + 110,
-                                window_height - CONTROL_PANEL_HEIGHT + 50,
-                                BUTTON_WIDTH, BUTTON_HEIGHT},
-                      isPaused ? "Resume" : "Pause")) {
-            if (isPaused) {
-                ResumeMusicStream(music);
-                isPaused = false;
+        if (GuiButton((Rectangle){
+                MUSIC_LIST_WIDTH+110,
+                h-CONTROL_PANEL_HEIGHT+50,
+                BUTTON_WIDTH, BUTTON_HEIGHT},
+            isPaused?"Resume":"Pause")) {
+            if (isPaused) ResumeMusicStream(music), isPaused=false;
+            else          PauseMusicStream(music),  isPaused=true;
+        }
+
+        SetMusicVolume(music, volume/100.0f);
+        GuiSliderBar((Rectangle){
+            MUSIC_LIST_WIDTH+60,
+            h-CONTROL_PANEL_HEIGHT+100,
+            BUTTON_WIDTH,10},
+            "Volume", NULL, &volume, 0, 100
+        );
+
+        DrawText(timeStr,
+                 MUSIC_LIST_WIDTH + 60 + BUTTON_WIDTH + 20,
+                 h - CONTROL_PANEL_HEIGHT + 95,
+                 18,
+                 RAYWHITE);
+
+        if (GuiButton((Rectangle){
+                MUSIC_LIST_WIDTH,
+                h-CONTROL_PANEL_HEIGHT+50,
+                BUTTON_WIDTH, BUTTON_HEIGHT},
+            "Seek -10s")) {
+            SeekMusicStream(music,
+                           GetMusicTimePlayed(music) - SEEK_TIME);
+            current_pos = GetMusicTimePlayed(music);
+        }
+        if (GuiButton((Rectangle){
+                MUSIC_LIST_WIDTH+230,
+                h-CONTROL_PANEL_HEIGHT+50,
+                BUTTON_WIDTH, BUTTON_HEIGHT},
+            "Seek +10s")) {
+            float t = GetMusicTimePlayed(music);
+            if (t + SEEK_TIME >= GetMusicTimeLength(music)) {
+                int next = GetNextIndex();
+                PlayMusicByIndex(next);
+                selectedFile = current_play;
+                prev_active  = current_play;
+                scrollIndex  = current_play;
+                music_len    = GetMusicTimeLength(music);
             } else {
-                PauseMusicStream(music);
-                isPaused = true;
+                SeekMusicStream(music, t + SEEK_TIME);
             }
-        }
-
-        SetMusicVolume(music, volume / 100.0f);
-
-        // Seek +10s button
-        if (GuiButton((Rectangle){MUSIC_LIST_WIDTH + 230,
-                                window_height - CONTROL_PANEL_HEIGHT + 50,
-                                BUTTON_WIDTH, BUTTON_HEIGHT},
-                      "Seek +10s")) {
-            SeekMusicStream(music, GetMusicTimePlayed(music) + SEEK_TIME);
-        }
-
-        // Seek -10s button
-        if (GuiButton((Rectangle){MUSIC_LIST_WIDTH,
-                                window_height - CONTROL_PANEL_HEIGHT + 50,
-                                BUTTON_WIDTH, BUTTON_HEIGHT},
-                      "Seek -10s")) {
-            SeekMusicStream(music, GetMusicTimePlayed(music) - SEEK_TIME);
-        }
-
-        Rectangle des = {
-                MUSIC_LIST_WIDTH + 60,
-                window_height - CONTROL_PANEL_HEIGHT + 100,
-                BUTTON_WIDTH, 10
-        };
-        //volume slider
-        GuiSliderBar(des, "Volume", NULL, &volume, 0, 100);
-
-        Rectangle des_seek = {
-                MUSIC_LIST_WIDTH + 10,
-                window_height - CONTROL_PANEL_HEIGHT + PADDING,
-                window_width - MUSIC_LIST_WIDTH - PADDING + 25, 10
-        };
-
-        if (CheckCollisionPointRec(GetMousePosition(), des_seek) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            is_dragging = true;
-        }
-
-        if (!is_dragging) {
             current_pos = GetMusicTimePlayed(music);
         }
 
-        if (is_dragging && IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
-            is_dragging = false;
-            SeekMusicStream(music, current_pos);
+        if (GuiButton((Rectangle){
+                MUSIC_LIST_WIDTH+350,
+                h-CONTROL_PANEL_HEIGHT+50,
+                BUTTON_WIDTH, BUTTON_HEIGHT},
+            shuffle_play?"Shuffle On":"Shuffle Off")) {
+            shuffle_play = !shuffle_play;
         }
 
-        GuiSliderBar(des_seek, NULL, NULL, &current_pos, 0, music_len);
-        // if (GuiButton((Rectangle){MUSIC_LIST_WIDTH + 110,
-        //                           window_height - CONTROL_PANEL_HEIGHT + 100,
-        //                           BUTTON_WIDTH, BUTTON_HEIGHT},
-        //               stuffle_play ? "Shuffle On" : "Shuffle Off")) {
-        //     stuffle_play = !stuffle_play; // Toggle shuffle state
-        //     if (stuffle_play && musicFileCount > 0) {
-        //         active = shuffle_music(); // Get a random index
-        //         if (active != -1 && active != prev_active) { // Avoid replaying the same track
-        //             UnloadMusicStream(music); // Unload current track
-        //             music = LoadMusicStream(musicFiles[active]); // Load new track
-        //             PlayMusicStream(music); // Start playback
-        //             prev_active = active; // Update the previous active track
-        //         }
-        //     }
-        // }
+        {
+            Rectangle seekBar = {
+                MUSIC_LIST_WIDTH + 10,
+                h - CONTROL_PANEL_HEIGHT + PADDING,
+                w - MUSIC_LIST_WIDTH - PADDING - 10,
+                10
+            };
+
+            if (CheckCollisionPointRec(GetMousePosition(), seekBar) &&
+                IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                is_dragging = true;
+            }
+
+            if (is_dragging && IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+                is_dragging = false;
+                if (current_pos >= music_len - 0.01f) {
+                    int next = GetNextIndex();
+                    PlayMusicByIndex(next);
+                    selectedFile = current_play;
+                    prev_active  = current_play;
+                    scrollIndex  = current_play;
+                    music_len    = GetMusicTimeLength(music);
+                } else {
+                    SeekMusicStream(music, current_pos);
+                }
+                current_pos = GetMusicTimePlayed(music);
+            }
+
+            if (!is_dragging) {
+                current_pos = GetMusicTimePlayed(music);
+            }
+
+            GuiSliderBar(seekBar, NULL, NULL,
+                         &current_pos, 0, music_len);
+        }
+
         EndDrawing();
     }
 
@@ -360,6 +355,5 @@ int main(int argc, char *argv[]) {
     fftwf_destroy_plan(fftPlan);
     CloseAudioDevice();
     CloseWindow();
-
     return 0;
 }
