@@ -31,7 +31,7 @@
 #define BACKGROUND_COLOR (Color){0,0,0,255}
 #define PADDING 30
 double lastColorChangeTime = 0.0;
-const double COLOR_CHANGE_INTERVAL = 5.0;
+const double COLOR_CHANGE_INTERVAL = 0.5;
 
 
 float audioData[BUFFER_SIZE];
@@ -45,6 +45,7 @@ bool isPlaying    = false;
 bool isPaused     = false;
 bool shuffle_play = false;
 int  current_play = 0;
+bool stuffle_play_on_or_off = false;
 
 char musicFiles[2048][512];
 int  musicFileCount = 0;
@@ -75,13 +76,6 @@ void LoadMusicFiles(const char *path) {
     }
     closedir(dp);
 }
-
-bool HasMusicReachedEnd(void) {
-    float t = GetMusicTimePlayed(music);
-    float L = GetMusicTimeLength(music);
-    return (t >= L - 0.01f) && isPlaying && !isPaused;
-}
-
 void PlayMusicByIndex(int idx) {
     if (idx < 0 || idx >= musicFileCount) return;
     if (isPlaying) StopMusicStream(music);
@@ -92,16 +86,6 @@ void PlayMusicByIndex(int idx) {
     isPlaying    = true;
     isPaused     = false;
     current_play = idx;
-}
-int GetNextIndex(void) {
-    if (shuffle_play && musicFileCount > 1) {
-        int rnd;
-        do { rnd = rand() % musicFileCount; }
-        while (rnd == current_play);
-        return rnd;
-    } else {
-        return (current_play + 1) % musicFileCount;
-    }
 }
 void ChangeBarColors(void) {
     Color start = (Color){rand() % 256, rand() % 256, rand() % 256, 255},
@@ -158,14 +142,21 @@ int main(int argc, char *argv[]) {
         snprintf(timeStr, sizeof(timeStr),
                  "%02d:%02d / %02d:%02d",
                  curMin, curSec, totMin, totSec);
-        if (HasMusicReachedEnd()) {
-            int next = GetNextIndex();
-            PlayMusicByIndex(next);
+        if (curMin == totMin && curSec == totSec && isPlaying && !isPaused) {
+            if (shuffle_play) {
+                int shuffle_index = rand() % musicFileCount;
+                if (musicFileCount > 1 && shuffle_index == current_play)
+                    shuffle_index = (shuffle_index + 1) % musicFileCount;
+
+                current_play = shuffle_index;
+            } else {
+                current_play++;
+                if (current_play >= musicFileCount) current_play = 0;
+            }
+            PlayMusicByIndex(current_play);
             selectedFile = current_play;
-            prev_active  = current_play;
-            scrollIndex  = current_play;
-            music_len    = GetMusicTimeLength(music);
         }
+
         if (GetTime() - lastColorChangeTime >= COLOR_CHANGE_INTERVAL) {
             ChangeBarColors();
             lastColorChangeTime = GetTime();
@@ -178,10 +169,9 @@ int main(int argc, char *argv[]) {
         if (IsKeyPressed(KEY_RIGHT)) {
             float t = GetMusicTimePlayed(music);
             if (t + SEEK_TIME >= GetMusicTimeLength(music)) {
-                int next = GetNextIndex();
+                int next = current_play+=1;
                 PlayMusicByIndex(next);
                 selectedFile = current_play;
-                prev_active  = current_play;
                 scrollIndex  = current_play;
                 music_len    = GetMusicTimeLength(music);
             } else {
@@ -193,10 +183,6 @@ int main(int argc, char *argv[]) {
             SeekMusicStream(music,
                            GetMusicTimePlayed(music) - SEEK_TIME);
             current_pos = GetMusicTimePlayed(music);
-        }
-        if (IsKeyPressed(KEY_ENTER)) {
-            if (isPlaying) StopMusicStream(music), isPlaying = false;
-            else           PlayMusicStream(music), isPlaying = true;
         }
         const char *fileList[musicFileCount];
         for (int i = 0; i < musicFileCount; i++)
@@ -210,6 +196,7 @@ int main(int argc, char *argv[]) {
         );
         if (selectedFile >= 0 && selectedFile != prev_active) {
             PlayMusicByIndex(selectedFile);
+            current_play = selectedFile;
             prev_active = selectedFile;
             music_len   = GetMusicTimeLength(music);
         }
@@ -285,7 +272,7 @@ int main(int argc, char *argv[]) {
             "Seek +10s")) {
             float t = GetMusicTimePlayed(music);
             if (t + SEEK_TIME >= GetMusicTimeLength(music)) {
-                int next = GetNextIndex();
+                int next = current_play+=1;
                 PlayMusicByIndex(next);
                 selectedFile = current_play;
                 prev_active  = current_play;
@@ -300,8 +287,10 @@ int main(int argc, char *argv[]) {
                 MUSIC_LIST_WIDTH+350,
                 h-CONTROL_PANEL_HEIGHT+50,
                 BUTTON_WIDTH, BUTTON_HEIGHT},
-            shuffle_play?"Shuffle On":"Shuffle Off")) {
+            shuffle_play ? "Shuffle On" : "Shuffle Off")) {
+
             shuffle_play = !shuffle_play;
+            stuffle_play_on_or_off = shuffle_play;
         }
         {
             Rectangle seekBar = {
@@ -317,7 +306,9 @@ int main(int argc, char *argv[]) {
             if (is_dragging && IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
                 is_dragging = false;
                 if (current_pos >= music_len - 0.01f) {
-                    int next = GetNextIndex();
+                    int next = shuffle_play
+                             ? rand() % musicFileCount
+                             : current_play + 1;
                     PlayMusicByIndex(next);
                     selectedFile = current_play;
                     prev_active  = current_play;
